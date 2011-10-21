@@ -1,17 +1,16 @@
 #include <Ethernet.h>
 #include <EthernetDHCP.h>
-#include <swarmConnector.h>
+#include "swarmConnector/swarmConnector.h"
 
 const byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
-const PGM_P api_key[] = "";
-const PGM_P swarm_id[] = "";
-const PGM_P resource_id[] = "";
+PGM_P api_key = "";
+PGM_P swarm_id = "";
+PGM_P resource_id = "";
 
-swarmClient swarm(api_key, swarm_id, resource_id);
+swarmConnector swarm(api_key, swarm_id, resource_id);
 
 const char* ip_to_str(const uint8_t*);
-
 const void onConnect();
 
 void setup()
