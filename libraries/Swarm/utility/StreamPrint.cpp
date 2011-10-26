@@ -1,6 +1,6 @@
-#include "Arduino.h"
-#include "Streamprint.h"
+#include <Arduino.h>
 #include <avr/pgmspace.h>
+#include "StreamPrint.h"
 
 void StreamPrint_progmem(Print &out,PGM_P format,...)
 {

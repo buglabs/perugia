@@ -1,7 +1,7 @@
-#ifndef Streamprint_h
-#define Streamprint_h
+#ifndef StreamPrint_h
+#define StreamPrint_h
 
-#include "Arduino.h"
+#include <Arduino.h>
 #include <avr/pgmspace.h>
 
 void StreamPrint_progmem(Print &out,PGM_P format,...);
