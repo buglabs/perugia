@@ -4,6 +4,8 @@
 
 // Mac address printed on sticker on ethershield
 static byte mac[6] = { 0x9D, 0xA2, 0xDA, 0x00, 0x03, 0x4E };
+static byte ip[4] = { 192, 168, 1, 18 };
+static byte dns[4] = { 192, 168, 1, 1 };
 
 // Setup the swarm
 Config config;
@@ -14,14 +16,11 @@ void setup() {
   config.swarmid = "";
   config.resourceid = "";
 
-  // Start the 
   Serial.begin(9600);
-  if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
-    while(true);
-  } 
+  Ethernet.begin(mac, ip, dns);
   delay(1000);
-
+  printNetworkInfo();
+  Serial.println('ICSEEYOU');
   swarm.connect(onConnect);
 }
 
