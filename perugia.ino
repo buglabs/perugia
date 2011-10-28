@@ -25,8 +25,8 @@ void setup() {
 }
 
 void loop() {
-  delay(2000);
   Serial.print('.');
+  delay(2000);
 }
 
 void onConnect(void) {
