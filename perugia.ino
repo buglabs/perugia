@@ -35,20 +35,17 @@ void onConnect(void) {
 }
 
 void printNetworkInfo() {
-  Serial.print("IP:");
-  PrintAddress(Ethernet.localIP());
-  Serial.println();
-  Serial.print("GW:");
-  PrintAddress(Ethernet.gatewayIP());
-  Serial.println();
-  Serial.print("IP:");
-  PrintAddress(Ethernet.dnsServerIP());
+  PrintAddress("IP", Ethernet.localIP());
+  PrintAddress("GW", Ethernet.gatewayIP());
+  PrintAddress("DNS", Ethernet.dnsServerIP());
+}
+
+void PrintAddress(char * label, IPAddress _ip) {
+  Serialprint("%s: ", label);
+  PrintAddress(_ip);
   Serial.println();
 }
 
-String PrintAddress(IPAddress ip) {
-  for (byte thisByte = 0; thisByte < 4; thisByte++) {
-    Serial.print(ip[thisByte], DEC);
-    Serial.print("."); 
-  }
+void PrintAddress(IPAddress _ip) {
+  Serialprint("%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
 }
