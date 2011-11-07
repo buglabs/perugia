@@ -24,11 +24,13 @@ const int HEADER_SIZE=320;
 char header[HEADER_SIZE];
 
 
+long lastConnectionTime = 0;
+const int postingInterval = 1000;
+
 EthernetClient client;
 void setup()
 {
   Serial.begin(9600);
-  Serial.println("OHAIMAHK");
   Ethernet.begin(mac, ip, dns, gw, subnet);
   delay(1000);
 
@@ -38,7 +40,6 @@ void setup()
   
   Serial.println("connecting...");
   if (client.connect(server, 80)) {
-     //Serialprint("%s\r\n%x\r\n%s\r\n", header, strlen(message), message);
      Streamprint(client,"%s\r\n%x\r\n%s\r\n", header, strlen(message), message);
   } else {
      Serial.println("connection failed");
@@ -48,9 +49,21 @@ void setup()
 
 void loop()
 {
+  // Read data as soon as its available
+  if (client.available()) {
+    char c = client.read();
+    Serial.print(c);
+  }
+
+  // We loop as fast as possible, and update only when it matters
+  if(millis() - lastConnectionTime > postingInterval) {
+    sendData();
+  }
+}
+
+void sendData() {
   if (client.connected()) {
     sprintf_P(message, PSTR(MESSAGE_TEMPLATE), analogRead(0), analogRead(1), analogRead(2), analogRead(3), analogRead(4));
-    //Serialprint("%x\r\n%s\r\n", strlen(message), message);
     Streamprint(client, "%x\r\n%s\r\n", strlen(message), message);
   } else {
     Serial.println("disconnected");
@@ -59,5 +72,5 @@ void loop()
       ;
     }
   }
-  delay(1000);
+  lastConnectionTime = millis();
 }
