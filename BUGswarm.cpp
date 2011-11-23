@@ -13,7 +13,6 @@ BUGswarm::BUGswarm(const char *swarm_id, const char *resource_id, const char *pa
 
 boolean BUGswarm::connect(const IPAddress *serv){
   server = serv;
-  produce_counter = 0;
   memset(swarm_buff, '\0', sizeof(swarm_buff));
   sprintf_P(swarm_buff, produce_header, swarm, resource, key);
   Serial.println("connecting...");
@@ -46,7 +45,5 @@ void BUGswarm::printData(){
 
 void BUGswarm::produce(char * message){
   Streamprint(client, "%x\r\n%s\r\n", strlen(message), message);
-  if (produce_counter++ > SWARM_PRODUCE_THRESHOLD)
-    //reconnect here
 }
 

@@ -26,7 +26,6 @@ class BUGswarm {
     const char *key;
     char swarm_buff[SWARM_BUFFER_SIZE];
     EthernetClient client;
-    int produce_counter;
 };
 
 
