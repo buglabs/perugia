@@ -19,13 +19,26 @@ class BUGswarm {
     void produce(char * message);
     //sendData() - soon to be deprecated - a sample application that produces the state of the analog pins    
     void sendData();
+    //available() - returns number of bytes remaining
+    int available();
+    //consume() - returns a pointer to the message retrieved by swarm
+    //check available() first!  Otherwise this will block until we get a valid message (not from us)
+    char * consume();
+    //resource() - returns a pointer to the resource of the current message
+    char * getSender();
+    //print out the message buffer without getting a new packet
+    void printBuffer();
   private:
+    void readMessage();
+
     const IPAddress *server;
     const char *swarm;
     const char *resource;
     const char *key;
     char swarm_buff[SWARM_BUFFER_SIZE];
     EthernetClient client;
+    char * payload;
+    char * sender;
 };
 
 

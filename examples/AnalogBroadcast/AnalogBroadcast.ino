@@ -10,7 +10,7 @@ byte dns[4] = { 8,8,8,8 };
 byte gw[4] = { 192,168,0,3 };
 byte subnet[4] = { 255,255,0,0 };
 
-IPAddress server(64,118,81,28); // api.bugswarm.net
+IPAddress server(64,118,81,28); // api.test.bugswarm.net
 const char * swarm_id =           "abcdefghijklmnopqrstuvwxyz1234567890abcd";
 const char * resource_id =        "abcdefghijklmnopqrstuvwxyz1234567890abcd";
 const char * participation_key =  "abcdefghijklmnopqrstuvwxyz1234567890abcd";
@@ -27,11 +27,15 @@ void setup()
   Ethernet.begin(mac, ip, dns, gw, subnet);
   delay(1000);
   while(!swarm.connect(&server)){}
+  Serialprint("connected!\n");
 }
 
 void loop()
 {
-  swarm.printData();
+  int avail = swarm.available();
+  if (avail>0){
+    Serialprint("%s\n",swarm.consume());
+  }
 
   if(millis() - lastConnectionTime > postingInterval) {
     sendData();
