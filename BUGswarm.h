@@ -13,23 +13,21 @@ class BUGswarm {
     BUGswarm(const char *swarm_id, const char *resource_id, const char *participation_key);
     //Connect() - opens a socket to a given address, and sends a header to begin producing.
     boolean connect(const IPAddress *serv);
-    //loop() - will be needed to process incoming swarm messages
-    void printData();
     //produce - will send a buffersworth of data to the swarm as is - make sure its valid JSON!
     void produce(char * message);
     //sendData() - soon to be deprecated - a sample application that produces the state of the analog pins    
     void sendData();
-    //available() - returns number of bytes remaining
+    //available() - returns bytes of SWARM data ready to be consume()'d
     int available();
     //consume() - returns a pointer to the message retrieved by swarm
     //check available() first!  Otherwise this will block until we get a valid message (not from us)
     char * consume();
     //resource() - returns a pointer to the resource of the current message
     char * getSender();
-    //print out the message buffer without getting a new packet
-    void printBuffer();
+    
   private:
     void readMessage();
+    void printBuffer();
 
     const IPAddress *server;
     const char *swarm;
@@ -40,5 +38,3 @@ class BUGswarm {
     char * payload;
     char * sender;
 };
-
-

@@ -26,12 +26,19 @@ boolean BUGswarm::connect(const IPAddress *serv){
   }
 }
 
+//NOTE, printBuffer is broken slightly by available()
+//available() places '\0' in swarm_buff in a few places, which will terminate the
+//string early. 
 void BUGswarm::printBuffer(){
   Serial.println(swarm_buff);
 }
 
-//There is a race condition somewhere within...  Try removing the printBuffer(), see how that goes for ya
-//crap, still happens occasionally with the printBuffer...
+//available is in context to swarm messages, NOT the underlying socket
+//so, if any data is available on the stream, available() will go and retrieve
+//an entire packet so that it can be parsed and determined a valid JSON packet
+//Be Careful!  Calling available() when data is waiting in the input buffer
+//will cause swarm_buff to be cleared.  Make sure consume() has been called first!
+//note that a return value of 0 is for non-payload messages - mostly presence
 int BUGswarm::available(){
   if (!client.available()){
     return -1;
@@ -39,42 +46,43 @@ int BUGswarm::available(){
   readMessage();
   if (swarm_buff[0] != '{')
     return -1;
-  printBuffer();
   payload = (char *)memmem(swarm_buff, sizeof(swarm_buff), "\"payload\"", 9);
   sender = (char *)memmem(swarm_buff, sizeof(swarm_buff), "\"resource\"", 10);
-  if (resource == NULL){
+  if (sender == NULL){
     return -1;
   }
+  void * senderTail = memmem(swarm_buff, sizeof(swarm_buff), "\"},\"payload\":", 13);
+  if (senderTail != NULL)
+    *((char *)senderTail) = '\0';
   if (memmem(sender, strlen(sender), resource, strlen(resource)) != NULL){
     return -1;
   }
   if (payload == NULL){
     return 0;
   }
-  //TODO - The next line should pattern match for ", and not \",
-  //Find the next instance of ", after payload+11, and zero it out (the " specifically)
-  *((char *)memchr(payload+11, '"', strlen(payload+11))) = '\0';
-  return strlen(payload) - 11;
+  //WARNING - the following will be broken if/when the consume messages are changed.
+  void * tail = memmem(payload, strlen(payload), ",\"public\":true", 14);
+  if (tail != NULL)
+    *((char *)tail) = '\0';
+  return strlen(payload) - 23;
 }
 
+//NOTE - available() MUST be called before calling consume
+//and data must be copied out of consume() before calling available() again!
+//calling available() will clear the memory returned by consume()!
 char * BUGswarm::consume(){
   if (payload == NULL)
     return NULL;
-  return payload+11;
+  return payload+10;
 }
 
+//NOTE - available() MUST be called before calling consume
+//and data must be copied out of consume() before calling available() again!
+//calling available() will clear the memory returned by consume()!
 char * BUGswarm::getSender(){
   if (sender == NULL)
     return NULL;
   return sender+12;
-}
-
-void BUGswarm::printData(){
-  if (!client.available())
-    return;
-  readMessage();
-  if (swarm_buff[0] == '{')
-    Serial.println(swarm_buff);
 }
 
 void BUGswarm::readMessage(){
@@ -92,6 +100,14 @@ void BUGswarm::readMessage(){
 }
 
 void BUGswarm::produce(char * message){
-  Streamprint(client, "%x\r\n%s\r\n", strlen(message), message);
+  if (client.connected()){
+    Streamprint(client, "%x\r\n%s\r\n", strlen(message), message);
+  } else {
+    Serialprint("Disconnected, reconnecting...\n");
+    do {
+      client.stop();
+      connect(server);
+    } while (!client.connected());
+  }
 }
 
