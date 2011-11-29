@@ -2,6 +2,7 @@
 #include <string.h>
 #include <avr/pgmspace.h>
 #include "BUGswarm.h"
+#include "SwarmMessage.h"
 #include "Streamprint.h"
 
 #define SWARM_PRODUCE_THRESHOLD  10
@@ -10,6 +11,7 @@ BUGswarm::BUGswarm(const char *swarm_id, const char *resource_id, const char *pa
   swarm = swarm_id;
   resource = resource_id;
   key = participation_key;
+  produce_idx = 0;
 }
 
 boolean BUGswarm::connect(const IPAddress *serv){
@@ -26,6 +28,27 @@ boolean BUGswarm::connect(const IPAddress *serv){
   }
 }
 
+size_t BUGswarm::write(uint8_t data){
+  if ((data == '\n')||(produce_idx > sizeof(produce_buff)-2)){
+    produce(produce_buff);
+    memset(produce_buff, '\0', sizeof(produce_buff));
+    produce_idx = 0;
+  }
+  else {
+    produce_buff[produce_idx++] = data;
+  }
+}
+
+int BUGswarm::read(){
+
+}
+int BUGswarm::peek(){
+
+}
+void BUGswarm::flush(){
+
+}
+
 //NOTE, printBuffer is broken slightly by available()
 //available() places '\0' in swarm_buff in a few places, which will terminate the
 //string early. 
@@ -33,38 +56,56 @@ void BUGswarm::printBuffer(){
   Serial.println(swarm_buff);
 }
 
-//available is in context to swarm messages, NOT the underlying socket
-//so, if any data is available on the stream, available() will go and retrieve
-//an entire packet so that it can be parsed and determined a valid JSON packet
-//Be Careful!  Calling available() when data is waiting in the input buffer
-//will cause swarm_buff to be cleared.  Make sure consume() has been called first!
-//note that a return value of 0 is for non-payload messages - mostly presence
+void BUGswarm::readUntilNewline(){
+  char c = client.read();
+  while(c != '\n')
+    c = client.read();
+}
+
+//available detects valid JSON, NOT raw characters available on the socket
+//if users want to parse swarm messages directly, they can still use this
 int BUGswarm::available(){
   if (!client.available()){
-    return -1;
+    return 0;
   }
+  if (client.peek() != '{'){
+    //disregard any invalid JSON forthwith
+    readUntilNewline();
+    return 0;
+  }
+  return 1;
+}
+
+SwarmMessage BUGswarm::fetchMessage(){
   readMessage();
-  if (swarm_buff[0] != '{')
-    return -1;
-  payload = (char *)memmem(swarm_buff, sizeof(swarm_buff), "\"payload\"", 9);
+  //printBuffer();
+  return SwarmMessage(swarm_buff);
+}
+
+void BUGswarm::parseMessage(){
+  /*payload = (char *)memmem(swarm_buff, sizeof(swarm_buff), "\"payload\"", 9);
   sender = (char *)memmem(swarm_buff, sizeof(swarm_buff), "\"resource\"", 10);
   if (sender == NULL){
     return -1;
   }
-  void * senderTail = memmem(swarm_buff, sizeof(swarm_buff), "\"},\"payload\":", 13);
-  if (senderTail != NULL)
-    *((char *)senderTail) = '\0';
   if (memmem(sender, strlen(sender), resource, strlen(resource)) != NULL){
     return -1;
   }
+  void * senderTail = *((char *)memmem(swarm_buff, sizeof(swarm_buff), "\"},\"payload\":", 13)) = '\0';
+  if (senderTail != NULL)
+    *((char *)senderTail) = '\0';
   if (payload == NULL){
     return 0;
   }
+  if (memmem(payload, strlen(payload), ",\"public\":true", 14) != NULL)
+    priv_message = false;
+  else
+    priv_message = true;
   //WARNING - the following will be broken if/when the consume messages are changed.
-  void * tail = memmem(payload, strlen(payload), ",\"public\":true", 14);
+  void * tail = memmem(payload, strlen(payload), ",\"public\":", 10);
   if (tail != NULL)
     *((char *)tail) = '\0';
-  return strlen(payload) - 23;
+  return strlen(payload) - 23;*/
 }
 
 //NOTE - available() MUST be called before calling consume

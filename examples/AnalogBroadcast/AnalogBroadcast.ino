@@ -57,9 +57,12 @@ void setup()
 
 void loop()
 {
-  if (swarm.available()>0){
-    Serial.print("received ");
-    Serial.println(swarm.consume());
+  if (swarm.available()){
+    SwarmMessage in = swarm.fetchMessage();
+    if (strcmp(in.resource, resource_id) != 0)
+      Serialprint("Swarm: %s Resource: %s Payload: %s\n",in.swarm, in.resource, in.payload);
+    in.destroy();
+    free(&in);
   }
 
   if(millis() - lastConnectionTime > postingInterval) {
@@ -71,7 +74,7 @@ void loop()
 void sendData() {
   memset(message, '\0', sizeof(message));
   sprintf_P(message, message_template, analogRead(0), analogRead(1), analogRead(2), analogRead(3), analogRead(4));
-  swarm.produce(message);
+  swarm.println(message);
   Serial.print("sending ");
   Serial.println(message);
   lastConnectionTime = millis(); 
