@@ -11,7 +11,21 @@ BUGswarm::BUGswarm(const char *swarm_id, const char *resource_id, const char *pa
   swarm = swarm_id;
   resource = resource_id;
   key = participation_key;
-  produce_idx = 0;
+  //set default swarm.print behavior:
+  wrapJSONForMe(true);
+}
+
+void BUGswarm::wrapJSONForMe(boolean value){
+  if (value){
+      message_header = message_header_JSON;
+      message_tail = message_tail_JSON;
+  } else {
+      message_header = message_header_basic;
+      message_tail = message_tail_basic;
+  }
+  memset(produce_buff, '\0', sizeof(produce_buff));
+  strcpy_P(produce_buff, message_header);
+  produce_idx = strlen(produce_buff);
 }
 
 boolean BUGswarm::connect(const IPAddress *serv){
@@ -29,12 +43,16 @@ boolean BUGswarm::connect(const IPAddress *serv){
 }
 
 size_t BUGswarm::write(uint8_t data){
-  if ((data == '\n')||(produce_idx > sizeof(produce_buff)-2)){
+  if ((data == '\n')||(produce_idx > sizeof(produce_buff)-strlen(message_tail)-1)){
+    strcat_P(produce_buff, message_tail);
     produce(produce_buff);
     memset(produce_buff, '\0', sizeof(produce_buff));
-    produce_idx = 0;
+    strcpy_P(produce_buff, message_header);
+    produce_idx = strlen(produce_buff);
   }
-  else {
+  //Strict enforcement of valid text-ascii.  You can still shoot yourself in the
+  //foot with JSON compliance, though.
+  else if ((data > 0x1F)&&(data < 0x80)){
     produce_buff[produce_idx++] = data;
   }
 }
@@ -80,6 +98,11 @@ SwarmMessage BUGswarm::fetchMessage(){
   readMessage();
   //printBuffer();
   return SwarmMessage(swarm_buff);
+}
+
+void BUGswarm::printMessage(){
+  readMessage();
+  printBuffer();
 }
 
 void BUGswarm::parseMessage(){

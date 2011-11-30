@@ -13,13 +13,9 @@ networking variables (mac, ip, gw, subnet) are valid.  Finally, uncomment the se
 variable for the swarm server you wish to use (ping the server to make sure that
 the IP address is still valid!)
 
-If everything works, you should see serial data like this:
+The serial monitor will indicate what data is being transmitted, as well as any
+swarm messages on the line.
 
-connecting...connected!
-sending {"message": {"payload": {"analog": [473, 383, 348, 323, 308] }}}
-sending {"message": {"payload": {"analog": [275, 265, 262, 259, 263] }}}
-received {"data":"wheee"} from 54c30d39e1e8187cfbe13ea8766b830deaae307b
-sending {"message": {"payload": {"analog": [293, 285, 286, 285, 283] }}}
 */
 
 #include <SPI.h>
@@ -41,7 +37,6 @@ const char * resource_id =        "abcdefghijklmnopqrstuvwxyz1234567890abcd";
 const char * participation_key =  "abcdefghijklmnopqrstuvwxyz1234567890abcd";
 BUGswarm swarm(swarm_id, resource_id, participation_key);
 
-const char message_template[] PROGMEM = "{\"message\": {\"payload\": {\"analog\": \[%d, %d, %d, %d, %d] }}}";
 long lastConnectionTime = 0;
 const int postingInterval = 1000;
 char message[50];
@@ -53,16 +48,13 @@ void setup()
   delay(1000);
   while(!swarm.connect(&server)){}
   Serialprint("connected!\n");
+  swarm.wrapJSONForMe(false);
 }
 
 void loop()
 {
   if (swarm.available()){
-    SwarmMessage in = swarm.fetchMessage();
-    if (strcmp(in.resource, resource_id) != 0)
-      Serialprint("Swarm: %s Resource: %s Payload: %s\n",in.swarm, in.resource, in.payload);
-    in.destroy();
-    free(&in);
+    swarm.printMessage();
   }
 
   if(millis() - lastConnectionTime > postingInterval) {
@@ -73,9 +65,9 @@ void loop()
 
 void sendData() {
   memset(message, '\0', sizeof(message));
-  sprintf_P(message, message_template, analogRead(0), analogRead(1), analogRead(2), analogRead(3), analogRead(4));
-  swarm.println(message);
+  sprintf(message, "{\"analog\": \[%d, %d, %d, %d, %d] }", analogRead(0), analogRead(1), analogRead(2), analogRead(3), analogRead(4));
   Serial.print("sending ");
   Serial.println(message);
+  swarm.println(message);
   lastConnectionTime = millis(); 
 }

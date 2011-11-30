@@ -7,8 +7,13 @@
 #define SWARM_INPUT_BUFFER_SIZE       340
 #define SWARM_OUTPUT_BUFFER_SIZE        120
 
-const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n15\r\n{\"message\":\"hi mom!\"}\r\n";
+//const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n15\r\n{\"message\":\"hi mom!\"}\r\n";
+const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n1\r\n\n\r\n";
 const char newresource_json[] PROGMEM = "{\"name\":\"%s\",\"machine_type\":\"pc\",\"description\":\"Arduino\"}";
+const char message_header_JSON[] PROGMEM = "{\"message\": {\"payload\": {\"data\":\"";
+const char message_header_basic[] PROGMEM = "{\"message\": {\"payload\":";
+const char message_tail_JSON[] PROGMEM = "\"}}}";
+const char message_tail_basic[] PROGMEM = "}}";
 
 class BUGswarm : public Stream {
   public:
@@ -28,6 +33,12 @@ class BUGswarm : public Stream {
     char * getSender();
     //read an entire swarm message into the buffer and parse it
     SwarmMessage fetchMessage();
+    //read an entire swarm message into the buffer and print it
+    void printMessage();
+    //when using any print or stream related functions, this changes the level of wrapping
+    //true - all JSON is abstracted away from the user - can send simple strings (quotes double escaped!)
+    //false - user must provide swarm payload: contents - needs to be valid JSON '{"data":"things!"}'
+    void wrapJSONForMe(boolean value);
 
     size_t write(uint8_t data);
     int read();
@@ -52,4 +63,6 @@ class BUGswarm : public Stream {
     EthernetClient client;
     char * payload;
     char * sender;
+    const char * message_header PROGMEM;
+    const char * message_tail PROGMEM;
 };
