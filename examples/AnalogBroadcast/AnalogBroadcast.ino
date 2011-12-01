@@ -49,12 +49,15 @@ void setup()
   while(!swarm.connect(&server)){}
   Serialprint("connected!\n");
   swarm.wrapJSONForMe(false);
+  swarm.setRawReadMode(false);
 }
 
 void loop()
 {
-  if (swarm.available()){
-    swarm.printMessage();
+  if (swarm.peek() != -1){
+    memset(message, '\0', sizeof(message));
+    swarm.readBytesUntil('\n', message, sizeof(message)-1);
+    Serialprint("Got message: %s\n",message);
   }
 
   if(millis() - lastConnectionTime > postingInterval) {

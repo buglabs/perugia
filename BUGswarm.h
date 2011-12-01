@@ -7,6 +7,10 @@
 #define SWARM_INPUT_BUFFER_SIZE       340
 #define SWARM_OUTPUT_BUFFER_SIZE        120
 
+#define READ_STATE_LOOKING      0x0
+#define READ_STATE_PAYLOAD      0x1
+#define READ_STATE_SENDER       0x2
+
 //const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n15\r\n{\"message\":\"hi mom!\"}\r\n";
 const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n1\r\n\n\r\n";
 const char newresource_json[] PROGMEM = "{\"name\":\"%s\",\"machine_type\":\"pc\",\"description\":\"Arduino\"}";
@@ -14,6 +18,8 @@ const char message_header_JSON[] PROGMEM = "{\"message\": {\"payload\": {\"data\
 const char message_header_basic[] PROGMEM = "{\"message\": {\"payload\":";
 const char message_tail_JSON[] PROGMEM = "\"}}}";
 const char message_tail_basic[] PROGMEM = "}}";
+const char payload_indicator[] PROGMEM = "\"payload\"";    
+const char resource_indicator[] PROGMEM = "\"resource\"";
 
 class BUGswarm : public Stream {
   public:
@@ -39,6 +45,9 @@ class BUGswarm : public Stream {
     //true - all JSON is abstracted away from the user - can send simple strings (quotes double escaped!)
     //false - user must provide swarm payload: contents - needs to be valid JSON '{"data":"things!"}'
     void wrapJSONForMe(boolean value);
+    //enable or disable raw read mode - if true, raw messages will be returned by read() calls
+    //if false, read will only return swarm payloads 
+    void setRawReadMode(boolean value){rawReadMode = value;};
 
     size_t write(uint8_t data);
     int read();
@@ -47,22 +56,36 @@ class BUGswarm : public Stream {
     
     //variable indicating if the last message was private
     boolean priv_message;
+    
+    
   private:
     void readMessage();
     void parseMessage();
     void readUntilNewline();
     void printBuffer();
 
+    EthernetClient client;
+    char swarm_buff[SWARM_INPUT_BUFFER_SIZE];
+
+    //general object settings
     const IPAddress *server;
     const char *swarm;
     const char *resource;
     const char *key;
-    char swarm_buff[SWARM_INPUT_BUFFER_SIZE];
-    char produce_buff[SWARM_OUTPUT_BUFFER_SIZE];
-    unsigned char produce_idx;
-    EthernetClient client;
-    char * payload;
-    char * sender;
+    boolean read_payload;
     const char * message_header PROGMEM;
     const char * message_tail PROGMEM;
+    boolean rawReadMode;
+
+    //for write()
+    char produce_buff[SWARM_OUTPUT_BUFFER_SIZE];
+    unsigned char produce_idx;
+
+    //For read()
+    char read_counter;
+    int read_idx;
+    char read_buff[10];
+    int readCountdown;
+    int read_state;
+    int peekbyte;
 };

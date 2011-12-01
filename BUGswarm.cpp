@@ -13,6 +13,10 @@ BUGswarm::BUGswarm(const char *swarm_id, const char *resource_id, const char *pa
   key = participation_key;
   //set default swarm.print behavior:
   wrapJSONForMe(true);
+  rawReadMode = false;
+  read_counter = 0;
+  read_idx = -1;
+  peekbyte = -1;
 }
 
 void BUGswarm::wrapJSONForMe(boolean value){
@@ -58,10 +62,90 @@ size_t BUGswarm::write(uint8_t data){
 }
 
 int BUGswarm::read(){
+  if (peekbyte != -1){
+    char temp = peekbyte;
+    peekbyte = -1;
+    return temp;
+  }
+  if (rawReadMode)
+    return client.read();
+  //block until available
+  while (!available()) {}
+  char c = client.read();
+  //Serialprint("%i%c", read_state, c);
+  if (readCountdown > 0){
+    readCountdown--;
+    return -1;
+  }
+  switch (read_state){
+  case READ_STATE_PAYLOAD:
+    if (c == '{'){
+      read_counter++;
+    }
+    if (read_counter == 0){
+      readUntilNewline();
+      read_state = READ_STATE_LOOKING;
+      return '\n';
+    }
+    if (c == '}'){
+      read_counter--;  
+    }    
+    return c;
 
+  case READ_STATE_LOOKING:
+    if (c == '\n'){
+      read_idx = -1;
+      return -1;
+    }
+    if ((c == '"') && (read_idx == -1)){
+      read_idx = 0;
+      memset(read_buff, '\0', 10);
+    }
+    if ((read_idx >= 0)&&(read_idx < sizeof(read_buff)))
+      read_buff[read_idx++] = c;
+    if ((c == '"') && (read_idx > 2)){
+      //Serialprint(" %s ",read_buff);
+      read_idx = -1;
+      if (strcmp_P(read_buff, payload_indicator) == 0){ //check if this is a "payload":
+        read_counter = 0;
+        read_state = READ_STATE_PAYLOAD;
+        readCountdown = 1;
+      } else if (strcmp_P(read_buff, resource_indicator) == 0){
+        read_counter = 0;
+        read_state = READ_STATE_SENDER;
+        readCountdown = 2;
+      }
+    }
+    break;
+
+  case READ_STATE_SENDER:
+    if (read_counter >= sizeof(resource)){
+      //if we get through the entire resource string without any differences,
+      //this is one of our messages - SKIP IT.
+      //Serialprint("Skip!\n");
+      readUntilNewline();
+      read_state = READ_STATE_LOOKING;
+    }
+    if ((c == '"')||(c != resource[read_counter])){
+      //if resource varies (or quote terminates), this message is not from us!
+      //Serialprint("Don't Skip!\n");
+      read_state = READ_STATE_LOOKING;
+      read_idx = -1;
+      //read until the next ", so that we don't confuse the poor READ_STATE_LOOKING
+      while (c != '"')
+        c = client.read();
+      c = client.read();
+    }
+    read_counter++;
+    break;
+  }
+  return -1;
 }
 int BUGswarm::peek(){
-
+  if (!available())
+    return -1;
+  peekbyte = read();
+  return peekbyte;
 }
 void BUGswarm::flush(){
 
@@ -86,11 +170,11 @@ int BUGswarm::available(){
   if (!client.available()){
     return 0;
   }
-  if (client.peek() != '{'){
-    //disregard any invalid JSON forthwith
-    readUntilNewline();
-    return 0;
-  }
+  //if (client.peek() != '{'){
+  //  //disregard any invalid JSON forthwith
+  //  readUntilNewline();
+  //  return 0;
+  //}
   return 1;
 }
 
@@ -103,50 +187,6 @@ SwarmMessage BUGswarm::fetchMessage(){
 void BUGswarm::printMessage(){
   readMessage();
   printBuffer();
-}
-
-void BUGswarm::parseMessage(){
-  /*payload = (char *)memmem(swarm_buff, sizeof(swarm_buff), "\"payload\"", 9);
-  sender = (char *)memmem(swarm_buff, sizeof(swarm_buff), "\"resource\"", 10);
-  if (sender == NULL){
-    return -1;
-  }
-  if (memmem(sender, strlen(sender), resource, strlen(resource)) != NULL){
-    return -1;
-  }
-  void * senderTail = *((char *)memmem(swarm_buff, sizeof(swarm_buff), "\"},\"payload\":", 13)) = '\0';
-  if (senderTail != NULL)
-    *((char *)senderTail) = '\0';
-  if (payload == NULL){
-    return 0;
-  }
-  if (memmem(payload, strlen(payload), ",\"public\":true", 14) != NULL)
-    priv_message = false;
-  else
-    priv_message = true;
-  //WARNING - the following will be broken if/when the consume messages are changed.
-  void * tail = memmem(payload, strlen(payload), ",\"public\":", 10);
-  if (tail != NULL)
-    *((char *)tail) = '\0';
-  return strlen(payload) - 23;*/
-}
-
-//NOTE - available() MUST be called before calling consume
-//and data must be copied out of consume() before calling available() again!
-//calling available() will clear the memory returned by consume()!
-char * BUGswarm::consume(){
-  if (payload == NULL)
-    return NULL;
-  return payload+10;
-}
-
-//NOTE - available() MUST be called before calling consume
-//and data must be copied out of consume() before calling available() again!
-//calling available() will clear the memory returned by consume()!
-char * BUGswarm::getSender(){
-  if (sender == NULL)
-    return NULL;
-  return sender+12;
 }
 
 void BUGswarm::readMessage(){
