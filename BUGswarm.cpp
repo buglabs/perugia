@@ -27,9 +27,10 @@ void BUGswarm::wrapJSONForMe(boolean value){
       message_header = message_header_basic;
       message_tail = message_tail_basic;
   }
-  memset(produce_buff, '\0', sizeof(produce_buff));
-  strcpy_P(produce_buff, message_header);
-  produce_idx = strlen(produce_buff);
+  wrapJSON = value;
+  memset(swarm_buff, '\0', SWARM_BUFFER_SIZE);
+  strcpy_P(swarm_buff, message_header);
+  produce_idx = strlen(swarm_buff);
 }
 
 boolean BUGswarm::connect(const IPAddress *serv){
@@ -47,17 +48,17 @@ boolean BUGswarm::connect(const IPAddress *serv){
 }
 
 size_t BUGswarm::write(uint8_t data){
-  if ((data == '\n')||(produce_idx > sizeof(produce_buff)-strlen(message_tail)-1)){
-    strcat_P(produce_buff, message_tail);
-    produce(produce_buff);
-    memset(produce_buff, '\0', sizeof(produce_buff));
-    strcpy_P(produce_buff, message_header);
-    produce_idx = strlen(produce_buff);
+  if ((data == '\n')||(produce_idx > SWARM_BUFFER_SIZE-strlen(message_tail)-1)){
+    strcat_P(swarm_buff, message_tail);
+    produce(swarm_buff);
+    memset(swarm_buff, '\0', SWARM_BUFFER_SIZE);
+    strcpy_P(swarm_buff, message_header);
+    produce_idx = strlen(swarm_buff);
   }
   //Strict enforcement of valid text-ascii.  You can still shoot yourself in the
   //foot with JSON compliance, though.
   else if ((data > 0x1F)&&(data < 0x80)){
-    produce_buff[produce_idx++] = data;
+    swarm_buff[produce_idx++] = data;
   }
 }
 
@@ -92,6 +93,15 @@ int BUGswarm::read(){
     }    
     return c;
 
+  case READ_STATE_WRAPPED:
+    if ((c == '"')&&(last_byte != '\\')){
+      readUntilNewline();
+      read_state = READ_STATE_LOOKING;
+      return '\n';
+    }
+    last_byte = c;
+    return c;
+
   case READ_STATE_LOOKING:
     if (c == '\n'){
       read_idx = -1;
@@ -106,14 +116,18 @@ int BUGswarm::read(){
     if ((c == '"') && (read_idx > 2)){
       //Serialprint(" %s ",read_buff);
       read_idx = -1;
-      if (strcmp_P(read_buff, payload_indicator) == 0){ //check if this is a "payload":
+      if ((wrapJSON)&&(strcmp_P(read_buff, payload_indicator_basic) == 0)){ //check if this is a "data":
+        read_counter = 0;
+        read_state = READ_STATE_WRAPPED;
+        client.find("\"",1);
+      }else if ((!wrapJSON)&&(strcmp_P(read_buff, payload_indicator_JSON) == 0)){ //check if this is a "payload":
         read_counter = 0;
         read_state = READ_STATE_PAYLOAD;
-        readCountdown = 1;
+        client.read();
       } else if (strcmp_P(read_buff, resource_indicator) == 0){
         read_counter = 0;
         read_state = READ_STATE_SENDER;
-        readCountdown = 2;
+        client.find("\"",1);
       }
     }
     break;
@@ -151,9 +165,15 @@ void BUGswarm::flush(){
 
 }
 
-//NOTE, printBuffer is broken slightly by available()
-//available() places '\0' in swarm_buff in a few places, which will terminate the
-//string early. 
+boolean BUGswarm::getNewMessage(char * buff, int len){
+  if (peek() != -1){
+    memset(buff, '\0', len);
+    readBytesUntil('\n', buff, len-1);
+    return true;
+  }
+  return false;
+}
+
 void BUGswarm::printBuffer(){
   Serial.println(swarm_buff);
 }
@@ -176,12 +196,6 @@ int BUGswarm::available(){
   //  return 0;
   //}
   return 1;
-}
-
-SwarmMessage BUGswarm::fetchMessage(){
-  readMessage();
-  //printBuffer();
-  return SwarmMessage(swarm_buff);
 }
 
 void BUGswarm::printMessage(){

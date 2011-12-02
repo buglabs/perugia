@@ -4,12 +4,12 @@
 #include <avr/pgmspace.h>
 #include "SwarmMessage.h"
 
-#define SWARM_INPUT_BUFFER_SIZE       340
-#define SWARM_OUTPUT_BUFFER_SIZE        120
+#define SWARM_BUFFER_SIZE       340
 
 #define READ_STATE_LOOKING      0x0
 #define READ_STATE_PAYLOAD      0x1
 #define READ_STATE_SENDER       0x2
+#define READ_STATE_WRAPPED      0x3
 
 //const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n15\r\n{\"message\":\"hi mom!\"}\r\n";
 const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n1\r\n\n\r\n";
@@ -18,7 +18,8 @@ const char message_header_JSON[] PROGMEM = "{\"message\": {\"payload\": {\"data\
 const char message_header_basic[] PROGMEM = "{\"message\": {\"payload\":";
 const char message_tail_JSON[] PROGMEM = "\"}}}";
 const char message_tail_basic[] PROGMEM = "}}";
-const char payload_indicator[] PROGMEM = "\"payload\"";    
+const char payload_indicator_JSON[] PROGMEM = "\"payload\"";    
+const char payload_indicator_basic[] PROGMEM = "\"data\"";
 const char resource_indicator[] PROGMEM = "\"resource\"";
 
 class BUGswarm : public Stream {
@@ -33,12 +34,6 @@ class BUGswarm : public Stream {
     //available() - returns 1 if valid JSON is ready to be read, 0 if no valid json is on the line
     //typical usage - wait until swarm.available(), then swarm.fetchMessage()
     int available();
-    //
-    char * consume();
-    //resource() - returns a pointer to the resource of the current message
-    char * getSender();
-    //read an entire swarm message into the buffer and parse it
-    SwarmMessage fetchMessage();
     //read an entire swarm message into the buffer and print it
     void printMessage();
     //when using any print or stream related functions, this changes the level of wrapping
@@ -48,6 +43,8 @@ class BUGswarm : public Stream {
     //enable or disable raw read mode - if true, raw messages will be returned by read() calls
     //if false, read will only return swarm payloads 
     void setRawReadMode(boolean value){rawReadMode = value;};
+
+    boolean getNewMessage(char * buff, int len);
 
     size_t write(uint8_t data);
     int read();
@@ -65,7 +62,7 @@ class BUGswarm : public Stream {
     void printBuffer();
 
     EthernetClient client;
-    char swarm_buff[SWARM_INPUT_BUFFER_SIZE];
+    char swarm_buff[SWARM_BUFFER_SIZE];
 
     //general object settings
     const IPAddress *server;
@@ -75,10 +72,11 @@ class BUGswarm : public Stream {
     boolean read_payload;
     const char * message_header PROGMEM;
     const char * message_tail PROGMEM;
+    const char * payload_indicator PROGMEM;
     boolean rawReadMode;
+    boolean wrapJSON;
 
     //for write()
-    char produce_buff[SWARM_OUTPUT_BUFFER_SIZE];
     unsigned char produce_idx;
 
     //For read()
@@ -88,4 +86,5 @@ class BUGswarm : public Stream {
     int readCountdown;
     int read_state;
     int peekbyte;
+    char last_byte;
 };

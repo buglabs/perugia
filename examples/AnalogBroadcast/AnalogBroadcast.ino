@@ -14,7 +14,7 @@ variable for the swarm server you wish to use (ping the server to make sure that
 the IP address is still valid!)
 
 The serial monitor will indicate what data is being transmitted, as well as any
-swarm messages on the line.
+swarm messages from other resources in the swarm.
 
 */
 
@@ -54,11 +54,8 @@ void setup()
 
 void loop()
 {
-  if (swarm.peek() != -1){
-    memset(message, '\0', sizeof(message));
-    swarm.readBytesUntil('\n', message, sizeof(message)-1);
+  if (swarm.getNewMessage(message, sizeof(message)))
     Serialprint("Got message: %s\n",message);
-  }
 
   if(millis() - lastConnectionTime > postingInterval) {
     sendData();
