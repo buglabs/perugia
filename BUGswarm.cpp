@@ -2,7 +2,6 @@
 #include <string.h>
 #include <avr/pgmspace.h>
 #include "BUGswarm.h"
-#include "SwarmMessage.h"
 #include "Streamprint.h"
 
 #define SWARM_PRODUCE_THRESHOLD  10

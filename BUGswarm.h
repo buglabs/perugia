@@ -2,7 +2,6 @@
 #include "EthernetClient.h"
 #include "IPAddress.h"
 #include <avr/pgmspace.h>
-#include "SwarmMessage.h"
 
 #define SWARM_BUFFER_SIZE       340
 
