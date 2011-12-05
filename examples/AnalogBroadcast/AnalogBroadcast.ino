@@ -1,11 +1,11 @@
 /*
 AnalogBroadcast
 
-A simple swarm demonstration of produce() and consume(), which will produce analog
+A simple swarm demonstration of BUGswarm, which will produce analog
 values from pins A0-A5 every second.
 
 This uses a mid-level interface to swarm - abstracted from the raw socket messages,
-but not fully abstracted from JSON (you need to produce() JSON in a particular format)
+but not fully abstracted from JSON (you need to println() JSON in a particular format)
 
 BEFORE UPLOADING make sure to create a resource and add it to a swarm.  Then fill in
 the swarm_id, resource_id and participation_key variables.  Also make sure that the
@@ -14,7 +14,7 @@ variable for the swarm server you wish to use (ping the server to make sure that
 the IP address is still valid!)
 
 The serial monitor will indicate what data is being transmitted, as well as any
-swarm messages from other resources in the swarm.
+swarm messages on the line.
 
 */
 
@@ -46,17 +46,24 @@ void setup()
   Serial.begin(115200);
   Ethernet.begin(mac, ip, dns, gw, subnet);
   delay(1000);
+  //keep looping until we successfully connect to the swarm server
   while(!swarm.connect(&server)){}
-  Serialprint("connected!\n");
+  Serial.println("connected!\n");
+  //This enables us to send our own JSON payload
   swarm.wrapJSONForMe(false);
+  //This filters out presence and messages from ourselves
   swarm.setRawReadMode(false);
 }
 
 void loop()
 {
-  if (swarm.getNewMessage(message, sizeof(message)))
-    Serialprint("Got message: %s\n",message);
+  //Check for a new message.  Print it if successful
+  if (swarm.getNewMessage(message, sizeof(message))){
+    Serial.print("Got message: ");
+    Serial.println(message);
+  }
 
+  //If postingInterval milliseconds have passed, run sendData()
   if(millis() - lastConnectionTime > postingInterval) {
     sendData();
     lastConnectionTime = millis();
@@ -64,10 +71,12 @@ void loop()
 }
 
 void sendData() {
+  //This will clear (zero out) our "message" buffer
   memset(message, '\0', sizeof(message));
+  //Write the message into the buffer - note that this must be valid JSON, since wrapJSONForMe was set to False
   sprintf(message, "{\"analog\": \[%d, %d, %d, %d, %d] }", analogRead(0), analogRead(1), analogRead(2), analogRead(3), analogRead(4));
   Serial.print("sending ");
   Serial.println(message);
+  //This will produce the message to our swarm
   swarm.println(message);
-  lastConnectionTime = millis(); 
 }
