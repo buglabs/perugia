@@ -1,89 +1,205 @@
+/*
+BUGswarm.h
+Author: Andrew Tergis 2011
+
+BUGswarm - an arduino library for the Swarm system by Buglabs.
+This library is intented to be neither minimum-viable nor 100% complete.  It
+aims to preform the minimum amount of abstraction to get an average arduino
+programmer up and running with the Swarm platform.  Any abstraction is
+intended to be optional - the library shouldn't force users to abstract away
+from custom JSON payloads, or from receiving presence messages.
+
+Programmers should be very mindful of the limited RAM and code space of the 
+arduino platform.  As much memory should be stored in program memory as
+possible, without adding extraneous retreival overhead.  This is a constant
+balance of functionality versus RAM consumption.  For sample usage of this
+library, see the "examples" folder.
+
+DEPENDENCIES:
+-Arduino release 1.0 or later
+-A Wiznet based EthernetShield (preferably the stock arduino shield)
+
+*/
+
+#ifndef BUGSWARM_H_
+#define BUGSWARM_H_
+
 #include "Arduino.h"
 #include "EthernetClient.h"
 #include "IPAddress.h"
 #include <avr/pgmspace.h>
 
+// The size of the only large buffer for this library
 #define SWARM_BUFFER_SIZE       340
 
+// States for the read() statemachine
 #define READ_STATE_LOOKING      0x0
 #define READ_STATE_PAYLOAD      0x1
 #define READ_STATE_SENDER       0x2
 #define READ_STATE_WRAPPED      0x3
 
-//const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n15\r\n{\"message\":\"hi mom!\"}\r\n";
-const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\nx-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive\r\nContent-Type: application/json\r\n\r\n1\r\n\n\r\n";
-const char newresource_json[] PROGMEM = "{\"name\":\"%s\",\"machine_type\":\"pc\",\"description\":\"Arduino\"}";
-const char message_header_JSON[] PROGMEM = "{\"message\": {\"payload\": {\"data\":\"";
+
+// PROGMEM string space:
+// Swarm specific messages (or parts of messages):
+//
+// produce_header - the HTML request, headers AND 1st payload needed to open
+// a Swarm connection that can produce and consume.
+const char produce_header[] PROGMEM = "POST /stream?swarm_id=%s&"
+  "resource_id=%s HTTP/1.1\r\nHost:api.test.bugswarm.net\r\n"
+  "x-bugswarmapikey:%s\r\ntransfer-encoding:chunked\r\nConnection:keep-alive"
+  "\r\nContent-Type: application/json\r\n\r\n1\r\n\n\r\n";
+  
+// text preceeding an outgoing message.
+// _JSON wraps a fixed JSON payload around the outgoing message
+const char message_header_JSON[] PROGMEM = "{\"message\": {\"payload\": "
+  "{\"data\":\"";
+  
+// _basic only contains the necessary swarm message format
 const char message_header_basic[] PROGMEM = "{\"message\": {\"payload\":";
+
+// text following an outgoing message, varies depending on wrapJSONForMe
 const char message_tail_JSON[] PROGMEM = "\"}}}";
 const char message_tail_basic[] PROGMEM = "}}";
+
+// search string for a valid payload, varies depending on wrapJSONForMe
 const char payload_indicator_JSON[] PROGMEM = "\"payload\"";    
 const char payload_indicator_basic[] PROGMEM = "\"data\"";
+
+// search string for a valid resource 
 const char resource_indicator[] PROGMEM = "\"resource\"";
+
+
+// class BUGswarm:
+//
+// a rough implementation of the Stream and Print classes allowing programmers 
+// to communicate with Swarm.  A basic swarm session could look like this:
+//
+// BUGswarm swarm(swarm_id, resource_id, participation_key)
+// IPAddress server(64,118,81,28); // api.test.bugswarm.net
+// swarm.connect(server)
+// swarm.wrapJSONForMe(true);
+// swarm.println("Hello world!");
+//
 
 class BUGswarm : public Stream {
   public:
+    // Initializes a new swarm object, see code in /examples/
     BUGswarm(const char *swarm_id, const char *resource_id, const char *participation_key);
-    //Connect() - opens a socket to a given address, and sends a header to begin producing.
+    
+    // Opens a connection to a swarm server and sends appropriate header.
     boolean connect(const IPAddress *serv);
-    //produce - will send a buffersworth of data to the swarm as is - make sure its valid JSON!
+    
+    // Directly produces data to the swarm.
+    // This can be used if your message is already compiled into a buffer.
+    // Otherwise, swarm.print() and swarm.println() can be used.
     void produce(char * message);
-    //sendData() - soon to be deprecated - a sample application that produces the state of the analog pins    
-    void sendData();
-    //available() - returns 1 if valid JSON is ready to be read, 0 if no valid json is on the line
-    //typical usage - wait until swarm.available(), then swarm.fetchMessage()
+    
+    // Determines if valid data is available to be read
+    // Effectively, if peek() > -1
     int available();
-    //read an entire swarm message into the buffer and print it
+    
+    // DEPRECATED
+    // Reads a line from the socket into the internal buffer, and prints it
     void printMessage();
-    //when using any print or stream related functions, this changes the level of wrapping
-    //true - all JSON is abstracted away from the user - can send simple strings (quotes double escaped!)
-    //false - user must provide swarm payload: contents - needs to be valid JSON '{"data":"things!"}'
+    
+    // Changes the amount of wrapping on both read() and write()
+    // If true, outgoing data will be wrapped into the following structure:
+    // {"data":"<message>"}
+    // incoming data will only be detected if it matches this structure.
+    // If false, outoing data MUST be a valid JSON object.
     void wrapJSONForMe(boolean value);
-    //enable or disable raw read mode - if true, raw messages will be returned by read() calls
-    //if false, read will only return swarm payloads 
+    
+    // Enables the raw reception of swarm data
+    // If true, all swarm messages (including presence, and messages produced
+    // by this resource) will be returned by read()
+    // If false, read will only return swarm payloads NOT owned by me
     void setRawReadMode(boolean value){rawReadMode = value;};
 
+    // Checks for new data (peeks()) and copies returned data into buff
+    // Returns true if a message was actually copied into buff
     boolean getNewMessage(char * buff, int len);
 
+    // The following functions allow us to implement Stream and Print.
+    // Any write operations that end with a '\n' will be produce()'d.
+    // Read and Peek operations will return -1 if no data is available, OR if
+    // the current data is filtered out by rawReadMode or wrapJSONForMe
+    // NOTE - read() or peek() must be called repeatedly in order for the 
+    // swarm messages to be filtered.  This allows us to remain nonblocking,
+    // but to preform the necessary processing to filter out unwanted messages.
     size_t write(uint8_t data);
     int read();
     int peek();
-    void flush();
-    
-    //variable indicating if the last message was private
-    boolean priv_message;
-    
+    void flush();    
     
   private:
+    // DEPRECATED
+    // Clears the swarm_buff, and reads one line from client into swarm_buff
     void readMessage();
-    void parseMessage();
+    
+    // Reads from client until a newline is reached.
+    // Essentially skips over the rest of a message waiting to be read.
     void readUntilNewline();
+    
+    // Prints the contents of swarm_buff - helper debug function.
     void printBuffer();
 
+    // An internal instance of EthernetClient - used by all swarm operations
     EthernetClient client;
+    
+    // The primary internal string buffer used by the BUGswarm library.
+    // This is used by both read() and write(), so those operations are not
+    // parallelizeable!
     char swarm_buff[SWARM_BUFFER_SIZE];
 
-    //general object settings
+    // A reference to the IP Address of the swarm server to connect to.
+    // IPAddress object provided by the arduino EthernetClient library.
     const IPAddress *server;
+    
+    // A reference to the swarm ID, a 40 character string.
     const char *swarm;
+    
+    // A reference to the resource ID, a 40 character string.
     const char *resource;
+    
+    // A reference to the producer API Key, a 40 character string.
     const char *key;
-    boolean read_payload;
+    
+    // A reference to the current message_header (see PROGMEM above)
     const char * message_header PROGMEM;
+    
+    // A reference to the current message_tail (see PROGMEM above)
     const char * message_tail PROGMEM;
+    
+    // A reference to the current payload search string (see PROGMEM above)
     const char * payload_indicator PROGMEM;
+    
+    // Stores the rawReadMode setting (see setRawReadMode() above)
     boolean rawReadMode;
+    
+    // Stores the wrapJSON setting (see wrapJSONForMe() above)
     boolean wrapJSON;
 
-    //for write()
-    unsigned char produce_idx;
+    // The last empty byte within swarm_buff when write()-ing
+    int produce_idx;
 
-    //For read()
+    // A token counter for brackets when reading
     char read_counter;
+    
+    // The number of bytes read while in READ_STATE_LOOKING
     int read_idx;
+    
+    // A small buffer used to detect where we are in the incoming byte stream
     char read_buff[10];
-    int readCountdown;
+    
+    // The main state variable for read()
+    // This will contain one of the READ_STATE defines declared above
     int read_state;
+    
+    // The last byte peek()'d - returned to user if a user peeks before reading
     int peekbyte;
+    
+    // A single helper byte to detect escaped quotes
     char last_byte;
 };
+
+#endif
